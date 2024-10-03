@@ -6,15 +6,22 @@ struct Layer {
     weights: Array2<f32>,
     biases: Array1<f32>,
 }
-pub struct MLP<const INPUT: usize, const OUTPUT: usize> {
+pub struct Mlp<const INPUT: usize, const OUTPUT: usize> {
     layers: Vec<Layer>, // Includes output-layer but not input-layer
 }
 
 fn activation(x: f32) -> f32 {
     x.max(0.0)
 }
+fn activation_derivative(x: f32) -> f32 {
+    if x > 0.0 {
+        1.0
+    } else {
+        0.0
+    }
+}
 
-impl<const INPUT: usize, const OUTPUT: usize> MLP<INPUT, OUTPUT> {
+impl<const INPUT: usize, const OUTPUT: usize> Mlp<INPUT, OUTPUT> {
     // layer_shape only includes hidden layers
     pub fn new(layer_shape: &[usize]) -> Self {
         let mut layers = Vec::new();
@@ -32,7 +39,7 @@ impl<const INPUT: usize, const OUTPUT: usize> MLP<INPUT, OUTPUT> {
             biases: output_biases,
         });
 
-        MLP { layers }
+        Mlp { layers }
     }
 
     pub fn forward(&self, input: [f32; INPUT]) -> [f32; OUTPUT] {
@@ -41,5 +48,21 @@ impl<const INPUT: usize, const OUTPUT: usize> MLP<INPUT, OUTPUT> {
             x = (layer.weights.dot(&x) + &layer.biases).map(|x| activation(*x));
         }
         x.to_vec().try_into().unwrap()
+    }
+
+    pub fn train(
+        &mut self,
+        inputs_and_targets: &[([f32; INPUT], [f32; OUTPUT])],
+        learning_rate: f32,
+    ) {
+        for &(input, target) in inputs_and_targets {
+            let output = Array1::from(self.forward(input).to_vec());
+            let target = Array1::from(target.to_vec());
+            let error = target - output;
+
+            for layer in self.layers.iter_mut().rev() {
+                todo!()
+            }
+        }
     }
 }

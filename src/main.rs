@@ -1,11 +1,11 @@
 mod mlp;
-use mlp::MLP;
+use mlp::Mlp;
 
 mod mandelbrot;
 use mandelbrot::escape_time;
 
 fn main() {
-    let mlp = MLP::<16, 16>::new(&[3, 7, 15]);
+    let mlp = Mlp::<16, 16>::new(&[3, 7, 15]);
     println!(
         "{:?}",
         mlp.forward([
