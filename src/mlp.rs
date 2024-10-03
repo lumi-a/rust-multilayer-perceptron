@@ -6,7 +6,7 @@ struct Layer {
     weights: Array2<f32>,
     biases: Array1<f32>,
 }
-struct MLP<const INPUT: usize, const OUTPUT: usize> {
+pub struct MLP<const INPUT: usize, const OUTPUT: usize> {
     layers: Vec<Layer>, // Includes output-layer but not input-layer
 }
 
@@ -16,7 +16,7 @@ fn activation(x: f32) -> f32 {
 
 impl<const INPUT: usize, const OUTPUT: usize> MLP<INPUT, OUTPUT> {
     // layer_shape only includes hidden layers
-    fn new(layer_shape: &[usize]) -> Self {
+    pub fn new(layer_shape: &[usize]) -> Self {
         let mut layers = Vec::new();
         let mut input_size = INPUT;
         for &size in layer_shape {
