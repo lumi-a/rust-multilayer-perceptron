@@ -50,19 +50,23 @@ impl<const INPUT: usize, const OUTPUT: usize> Mlp<INPUT, OUTPUT> {
         x.to_vec().try_into().unwrap()
     }
 
+    fn train_single(&mut self, input: [f32; INPUT], target: [f32; OUTPUT], learning_rate: f32) {
+        let output = Array1::from(self.forward(input).to_vec());
+        let target = Array1::from(target.to_vec());
+        let error = target - output;
+
+        for layer in self.layers.iter_mut().rev() {
+            todo!()
+        }
+    }
+
     pub fn train(
         &mut self,
         inputs_and_targets: &[([f32; INPUT], [f32; OUTPUT])],
         learning_rate: f32,
     ) {
         for &(input, target) in inputs_and_targets {
-            let output = Array1::from(self.forward(input).to_vec());
-            let target = Array1::from(target.to_vec());
-            let error = target - output;
-
-            for layer in self.layers.iter_mut().rev() {
-                todo!()
-            }
+            self.train_single(input, target, learning_rate);
         }
     }
 }
