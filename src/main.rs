@@ -1,3 +1,5 @@
+mod mlp;
+
 mod mandelbrot;
 use mandelbrot::escape_time;
 
