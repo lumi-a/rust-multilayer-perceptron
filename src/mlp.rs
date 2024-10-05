@@ -2,19 +2,21 @@ use ndarray::prelude::*;
 use ndarray_rand::rand_distr::Uniform;
 use ndarray_rand::RandomExt;
 
+#[derive(Debug)]
 struct Layer {
     weights: Array2<f32>,
     biases: Array1<f32>,
 }
+#[derive(Debug)]
 pub struct Mlp<const INPUT: usize, const OUTPUT: usize> {
     layers: Vec<Layer>, // Includes output-layer but not input-layer
 }
 
 fn activation(xs: &Array1<f32>) -> Array1<f32> {
-    xs.map(|x| x.max(0.0))
+    xs.map(|x| x.max(x * 0.01))
 }
 fn activation_derivative(xs: &Array1<f32>) -> Array1<f32> {
-    xs.map(|x| if *x > 0.0 { 1.0 } else { 0.0 })
+    xs.map(|x| if *x > 0.0 { 1.0 } else { 0.01 })
 }
 
 // SIGH https://github.com/rust-ndarray/ndarray/issues/1148
@@ -31,7 +33,11 @@ impl<const INPUT: usize, const OUTPUT: usize> Mlp<INPUT, OUTPUT> {
         let mut layers = Vec::new();
         let mut input_size = INPUT;
         for &size in layer_shape {
-            let weights = Array2::random((size, input_size), Uniform::new(-1.0, 1.0));
+            let weights = Array2::random(
+                (size, input_size),
+                Uniform::new(0.0, (2.0 / input_size as f32).sqrt()),
+            );
+
             let biases = Array1::zeros(size);
             layers.push(Layer { weights, biases });
             input_size = size;
@@ -56,12 +62,7 @@ impl<const INPUT: usize, const OUTPUT: usize> Mlp<INPUT, OUTPUT> {
     }
 
     /// Perform backpropagation, computing gradients for weights and biases
-    fn backpropagation(
-        &self,
-        input: &Array1<f32>,
-        target: &Array1<f32>,
-        learning_rate: f32,
-    ) -> Vec<Layer> {
+    fn backpropagation(&self, input: &Array1<f32>, target: &Array1<f32>) -> Vec<Layer> {
         // Manually do a forward-pass
         let (activations, pre_activations) = {
             let mut activations = Vec::with_capacity(self.layers.len());
@@ -93,8 +94,8 @@ impl<const INPUT: usize, const OUTPUT: usize> Mlp<INPUT, OUTPUT> {
             let bias_gradient = delta.clone();
 
             delta_reverse_layers.push(Layer {
-                weights: -learning_rate * weight_gradient,
-                biases: -learning_rate * bias_gradient,
+                weights: weight_gradient,
+                biases: bias_gradient,
             });
 
             // Prepare previous layer
@@ -118,20 +119,36 @@ impl<const INPUT: usize, const OUTPUT: usize> Mlp<INPUT, OUTPUT> {
         if inputs_and_targets.is_empty() {
             return;
         }
-        let adjusted_learning_rate = learning_rate / inputs_and_targets.len() as f32;
-        let mut delta_mlps = Vec::new();
+
+        // Initialize accumulators for gradients of weights and biases to 0
+        let mut accumulated_deltas = self
+            .layers
+            .iter()
+            .map(|layer| Layer {
+                weights: Array2::zeros(layer.weights.dim()),
+                biases: Array1::zeros(layer.biases.len()),
+            })
+            .collect::<Vec<_>>();
+
+        // For each input-target pair, perform backpropagation and accumulate the gradients
         for &(input, target) in inputs_and_targets {
             let target = Array1::from(target.to_vec());
             let input = Array1::from(input.to_vec());
-            let delta_layers = self.backpropagation(&input, &target, adjusted_learning_rate);
-            delta_mlps.push(delta_layers);
-        }
-        // Only after all the updates are collected, do a batch-update
-        for delta_layers in delta_mlps {
-            for (layer, delta_layer) in self.layers.iter_mut().zip(delta_layers) {
-                layer.weights = layer.weights.clone() + delta_layer.weights;
-                layer.biases = layer.biases.clone() + delta_layer.biases;
+
+            let delta_layers = self.backpropagation(&input, &target);
+
+            // Accumulate the gradients for weights and biases
+            for (accum_layer, delta_layer) in accumulated_deltas.iter_mut().zip(delta_layers) {
+                accum_layer.weights = &accum_layer.weights + &delta_layer.weights;
+                accum_layer.biases = &accum_layer.biases + &delta_layer.biases;
             }
+        }
+
+        // Now update the weights and biases by applying the accumulated (and averaged) gradients
+        let batch_size = inputs_and_targets.len() as f32;
+        for (layer, accum_layer) in self.layers.iter_mut().zip(accumulated_deltas) {
+            layer.weights = &layer.weights - learning_rate / batch_size * &accum_layer.weights;
+            layer.biases = &layer.biases - learning_rate / batch_size * &accum_layer.biases;
         }
     }
 }
