@@ -13,10 +13,18 @@ pub struct Mlp<const INPUT: usize, const OUTPUT: usize> {
 }
 
 fn activation(xs: &Array1<f32>) -> Array1<f32> {
-    xs.map(|x| x.max(x * 0.01))
+    // Leaky ReLU
+    // xs.map(|x| x.max(x * 0.1))
+
+    // tanh
+    xs.map(|x| x.tanh())
 }
 fn activation_derivative(xs: &Array1<f32>) -> Array1<f32> {
-    xs.map(|x| if *x > 0.0 { 1.0 } else { 0.01 })
+    // Leaky ReLU
+    // xs.map(|x| if *x > 0.0 { 1.0 } else { 0.1 })
+
+    // tanh
+    xs.map(|x| 1.0 / (x.cosh().powi(2)))
 }
 
 // SIGH https://github.com/rust-ndarray/ndarray/issues/1148
@@ -38,11 +46,14 @@ impl<const INPUT: usize, const OUTPUT: usize> Mlp<INPUT, OUTPUT> {
                 Uniform::new(0.0, (2.0 / input_size as f32).sqrt()),
             );
 
-            let biases = Array1::zeros(size);
+            let biases = Array1::random(size, Uniform::new(0.0, 0.01));
             layers.push(Layer { weights, biases });
             input_size = size;
         }
-        let output_weights = Array2::random((OUTPUT, input_size), Uniform::new(-1.0, 1.0));
+        let output_weights = Array2::random(
+            (OUTPUT, input_size),
+            Uniform::new(0.0, (2.0 / input_size as f32).sqrt()),
+        );
         let output_biases = Array1::random(OUTPUT, Uniform::new(0.0, 0.01));
         layers.push(Layer {
             weights: output_weights,
@@ -54,43 +65,69 @@ impl<const INPUT: usize, const OUTPUT: usize> Mlp<INPUT, OUTPUT> {
 
     pub fn forward(&self, input: [f32; INPUT]) -> [f32; OUTPUT] {
         let mut x = Array1::from(input.to_vec());
-        for layer in &self.layers {
+        for (i, layer) in self.layers.iter().enumerate() {
             let unactivated = layer.weights.dot(&x) + &layer.biases;
-            x = activation(&unactivated);
+            if i == self.layers.len() - 1 {
+                x = unactivated;
+            } else {
+                x = activation(&unactivated);
+            }
         }
         x.to_vec().try_into().unwrap()
     }
 
     /// Perform backpropagation, computing gradients for weights and biases
     fn backpropagation(&self, input: &Array1<f32>, target: &Array1<f32>) -> Vec<Layer> {
-        // Manually do a forward-pass
-        let (activations, pre_activations) = {
-            let mut activations = Vec::with_capacity(self.layers.len());
-            let mut pre_activations = Vec::with_capacity(self.layers.len());
-            activations.push(input.clone());
-            pre_activations.push(input.clone());
-            let mut current_activation = input.clone(); // Start with input
+        // Forward pass (same as before)
+        let (prev_activations, unactivations) = {
+            let mut prev_activations = Vec::with_capacity(self.layers.len() + 1);
+            let mut unactivations = Vec::with_capacity(self.layers.len() + 1);
+            prev_activations.push(input.clone());
+            let mut current_activation = input.clone();
 
-            for layer in &self.layers {
+            for (i, layer) in self.layers.iter().enumerate() {
                 let z = layer.weights.dot(&current_activation) + &layer.biases;
-                let a = activation(&z);
-                pre_activations.push(z);
-                activations.push(a.clone());
-                current_activation = a;
+                unactivations.push(z.clone());
+
+                if i == self.layers.len() - 1 {
+                    current_activation = z;
+                } else {
+                    current_activation = activation(&z);
+                }
+                prev_activations.push(current_activation.clone());
             }
-            (activations, pre_activations)
+            (prev_activations, unactivations)
         };
 
         let mut delta_reverse_layers = Vec::with_capacity(self.layers.len());
 
-        // Output-layer:
-        let mut delta = (activations.last().unwrap() - target)
-            * activation_derivative(pre_activations.last().unwrap());
+        // W = self.layers[l].weights
+        // b = self.layers[l].biases
+        // x = prev_activations[l]
+        // C = 1/2 * ‖Wx+b - target‖²
+        // ∂C/∂W =   [Wx+b - target] * x
+        // ∂C/∂b =   [Wx+b - target]
+        // delta =:  ^^^^^^^^^^^^^^^
+        let mut delta = prev_activations.last().unwrap() - target;
+        // Note that  Wx+b == unactivations[l] == prev_activations[l+1]
+        // because we don't have an activation-function on the final layer.
+        // let l = self.layers.len() - 1;
+        // assert_eq!(prev_activations[l + 1], unactivations[l]);
 
-        // Backpropagate through layers in reverse order
-        for (l, layer) in self.layers.iter().enumerate().rev() {
-            let prev_activation = activations[l].clone();
-            let weight_gradient = outer(&delta, &prev_activation);
+        for l in (0..self.layers.len()).rev() {
+            // W  = self.layers[l].weights
+            // b  = self.layers[l].biases
+            // x  = prev_activations[l]
+            // W" = self.layers[l-1].weights
+            // b" = self.layers[l-1].biases
+            // x" = prev_activations[l-1]
+            // C = 1/2 * ‖Wσ(W"x"+b")+b - target‖²
+            // ∂C/∂W" = delta * W * ∂x/∂W" = delta * W * σ'(W"x"+b") * x"
+            // ∂C/∂b" = delta * W * ∂x/∂b" = delta * W * σ'(W"x"+b")
+            // delta <- delta * W * σ'(W"x"+b")
+            // W"x"+b" == unactivations[l-1]
+
+            let weight_gradient = outer(&delta, &prev_activations[l]);
             let bias_gradient = delta.clone();
 
             delta_reverse_layers.push(Layer {
@@ -98,11 +135,9 @@ impl<const INPUT: usize, const OUTPUT: usize> Mlp<INPUT, OUTPUT> {
                 biases: bias_gradient,
             });
 
-            // Prepare previous layer
             if l > 0 {
-                let weights_transposed = layer.weights.t();
-                delta = weights_transposed.dot(&delta);
-                delta = delta * activation_derivative(&pre_activations[l]);
+                delta = self.layers[l].weights.t().dot(&delta);
+                delta = delta * activation_derivative(&unactivations[l - 1]);
             }
         }
 
