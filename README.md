@@ -1,6 +1,11 @@
-A most basic [Multilayer-Perceptron](https://en.wikipedia.org/wiki/Multilayer_perceptron) implemented in Rust, trained to determine the escape-time of points around the [Mandelbrot set](https://en.wikipedia.org/wiki/Mandelbrot_set).
+A most basic [Multilayer-Perceptron](https://en.wikipedia.org/wiki/Multilayer_perceptron) implemented in Rust, trained on a sine-wave.
 
-<!-- TODO: Add example images -->
+=== Running
+Install [`cargo`](https://doc.rust-lang.org/cargo) and run:
+```
+cd rust-multilayer-perceptron
+cargo run --release  # equivalent to `cargo r -r`
+```
 
-= Running
-You'll need [`cargo`](https://doc.rust-lang.org/cargo).
+=== License
+MIT OR Apache-2.0
