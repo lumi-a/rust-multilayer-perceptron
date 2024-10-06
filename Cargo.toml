@@ -1,12 +1,14 @@
 [package]
 name = "rust-multilayer-perceptron"
 version = "0.1.0"
+description = "Unoptimized MLPs in Rust"
+license = "MIT OR Apache-2.0"
+keywords = ["mlp"]
+categories = ["science"]
 edition = "2021"
+repository = "https://github.com/lumi-a/rust-multilayer-perceptron"
 
 [dependencies]
-image = "0.25.2"
-itertools = "0.13.0"
 ndarray = "0.16.1"
 ndarray-rand = "0.15.0"
 num = "0.4.3"
-rand = "0.8.5"

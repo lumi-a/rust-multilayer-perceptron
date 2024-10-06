@@ -2,16 +2,30 @@ use ndarray::prelude::*;
 use ndarray_rand::rand_distr::Uniform;
 use ndarray_rand::RandomExt;
 
+/// A layer of neurons of an MLP
 #[derive(Debug)]
 struct Layer {
+    /// The weights of this layers' neurons,
+    /// each column corresponding to one neuron of the previous layer
+    /// and each row corresponding to one neuron of this layer, so
+    /// that:
+    /// ```
+    /// new_activations = self.weights.dot(previous_activations) + self.biases
+    /// ```
     weights: Array2<f32>,
+    /// The biases of this layers' neurons
     biases: Array1<f32>,
 }
+
+/// A multilayer-perceptron (MLP)
 #[derive(Debug)]
 pub struct Mlp<const INPUT: usize, const OUTPUT: usize> {
-    layers: Vec<Layer>, // Includes output-layer but not input-layer
+    /// The layers of the MLP, including the output-layer
+    /// but not the input-layer.
+    layers: Vec<Layer>,
 }
 
+/// The activation function of all MLPs
 fn activation(xs: &Array1<f32>) -> Array1<f32> {
     // Leaky ReLU
     // xs.map(|x| x.max(x * 0.1))
@@ -19,6 +33,7 @@ fn activation(xs: &Array1<f32>) -> Array1<f32> {
     // tanh
     xs.map(|x| x.tanh())
 }
+/// The derivative of [`activation`].
 fn activation_derivative(xs: &Array1<f32>) -> Array1<f32> {
     // Leaky ReLU
     // xs.map(|x| if *x > 0.0 { 1.0 } else { 0.1 })
@@ -27,7 +42,8 @@ fn activation_derivative(xs: &Array1<f32>) -> Array1<f32> {
     xs.map(|x| 1.0 / (x.cosh().powi(2)))
 }
 
-// SIGH https://github.com/rust-ndarray/ndarray/issues/1148
+/// An outer product of two vectors.
+/// Stolen from <https://github.com/rust-ndarray/ndarray/issues/1148>
 fn outer(x: &Array<f32, Ix1>, y: &Array<f32, Ix1>) -> Array<f32, Ix2> {
     let (size_x, size_y) = (x.shape()[0], y.shape()[0]);
     let x_reshaped = x.view().into_shape_with_order((size_x, 1)).unwrap();
@@ -36,7 +52,9 @@ fn outer(x: &Array<f32, Ix1>, y: &Array<f32, Ix1>) -> Array<f32, Ix2> {
 }
 
 impl<const INPUT: usize, const OUTPUT: usize> Mlp<INPUT, OUTPUT> {
-    // layer_shape only includes hidden layers
+    /// Return a new randomly-initialized MLP.
+    /// The hidden layer sizes are given by `layer_shape`.
+    #[must_use]
     pub fn new(layer_shape: &[usize]) -> Self {
         let mut layers = Vec::new();
         let mut input_size = INPUT;
@@ -60,9 +78,11 @@ impl<const INPUT: usize, const OUTPUT: usize> Mlp<INPUT, OUTPUT> {
             biases: output_biases,
         });
 
-        Mlp { layers }
+        Self { layers }
     }
 
+    /// Compute the output of the MLP for the given input
+    #[must_use]
     pub fn forward(&self, input: [f32; INPUT]) -> [f32; OUTPUT] {
         let mut x = Array1::from(input.to_vec());
         for (i, layer) in self.layers.iter().enumerate() {
@@ -145,6 +165,7 @@ impl<const INPUT: usize, const OUTPUT: usize> Mlp<INPUT, OUTPUT> {
         delta_reverse_layers
     }
 
+    /// Train the MLP on the given inputs and targets
     pub fn train(
         &mut self,
         inputs_and_targets: &[([f32; INPUT], [f32; OUTPUT])],
