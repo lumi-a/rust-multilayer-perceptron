@@ -7,7 +7,7 @@ pub mod mlp;
 use mlp::Mlp;
 
 fn main() {
-    let mut mlp = Mlp::<1, 1>::new(&[16, 16, 16]);
+    let mut mlp = Mlp::<1, 1>::new(&[32, 16, 8]);
 
     // Generate training data
     let num_samples = 100u32;
