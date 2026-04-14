@@ -58,20 +58,15 @@ impl<const INPUT: usize, const OUTPUT: usize> Mlp<INPUT, OUTPUT> {
     pub fn new(layer_shape: &[usize]) -> Self {
         let mut layers = Vec::new();
         let mut input_size = INPUT;
+        let half = (2.0 / input_size as f32).sqrt();
         for &size in layer_shape {
-            let weights = Array2::random(
-                (size, input_size),
-                Uniform::new(0.0, (2.0 / input_size as f32).sqrt()),
-            );
+            let weights = Array2::random((size, input_size), Uniform::new(-half, half));
 
             let biases = Array1::random(size, Uniform::new(0.0, 0.01));
             layers.push(Layer { weights, biases });
             input_size = size;
         }
-        let output_weights = Array2::random(
-            (OUTPUT, input_size),
-            Uniform::new(0.0, (2.0 / input_size as f32).sqrt()),
-        );
+        let output_weights = Array2::random((OUTPUT, input_size), Uniform::new(-half, half));
         let output_biases = Array1::random(OUTPUT, Uniform::new(0.0, 0.01));
         layers.push(Layer {
             weights: output_weights,
